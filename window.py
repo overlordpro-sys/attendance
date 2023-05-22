@@ -1,26 +1,27 @@
-# hello_psg.py
-
 import PySimpleGUI as sg
 import mysql.connector
 from mysql.connector import Error
 import time
-import datetime
-# from mfrc522 import SimpleMFRC522
+from datetime import datetime
+from mfrc522 import SimpleMFRC522
 
 
-def confirm_window(first, last, team, id):
+def confirm_window(first, last, team, id, mydb, cursor):
     confirm_id = [sg.Text("ID: "), sg.Input(id, enable_events=False, disabled=True, key='ci_id')]
     confirm_info = [sg.Text('Team: '), sg.Input(team, enable_events=False, disabled=True, key='ci_team'),
                     sg.Text("Name: "),
                     sg.Input(first + last, enable_events=False, disabled=True, key='ci_name')]
-    window = sg.Window("Attendance", [[sg.Text("Is this you?", justfification='center')], confirm_id, confirm_info,
-                                      [sg.Button("Confirm")]])
+    window = sg.Window("Attendance", [[sg.Text("Is this you?", justification='center')], confirm_id, confirm_info,
+                                      [sg.Button("Confirm", bind_return_key=True)]])
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     while True:
         event, values = window.read()
         if event == "Confirm":
-            print("temp")
+            cursor.execute("INSERT INTO attendance (check_in_time, check_in_id) VALUES (%s, %s)", (now, id))
+            mydb.commit()
+            print(cursor.rowcount)
+            break
         if event == sg.WIN_CLOSED:
             break
     window.close()
@@ -54,7 +55,7 @@ def main():
     window = sg.Window("Attendance", layout)
 
     # Initialize the scanner
-    # reader = SimpleMFRC522()
+    reader = SimpleMFRC522()
 
     # Create an event loop
     while True:
@@ -68,18 +69,15 @@ def main():
             window['db_screen'].update(visible=False)
         # if on the check in screen, poll for successful scan
         if window['ci_screen'].visible:
-            # id, text = reader.read_no_block()
-            # if id is not None:
-            if True:  # placeholder for id scanner
-                # cursor.execute("SELECT first_name, last_name, team_section FROM members WHERE id = %s", id)
-                # row = cursor.fetchone()
-                row = True
+            id, text = reader.read_no_block()
+            if id is not None:
+                # if True:  # placeholder for id scanner
+                cursor.execute("SELECT first_name, last_name, team_section FROM members WHERE member_id = (%s)", (id,))
+                row = cursor.fetchone()
                 if row:
-                    confirm_window("Brent", "Lee", "Programming", 1)
-                    # confirm_window(row[0], row[1], row[2], id)
+                    confirm_window(row[0], row[1], row[2], id, mydb, cursor)
                 else:
-                    sg.popup_error("ID not found in database", title="Error")
-
+                    sg.popup_error("ID not found in database", title="Error", bind_return_key=True)
         if event == sg.WIN_CLOSED:
             break
     window.close()
