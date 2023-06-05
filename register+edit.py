@@ -53,7 +53,7 @@ def db_window(mydb, cursor):
     # Define the window layout
     layout = [
         [sg.Button('Show members table'), sg.Button('Show attendance table')],
-        [sg.Multiline(size=(60, 20), key='-OUTPUT-', enable_events=True)],
+        [sg.Multiline(size=(60, 20), key='db_table', enable_events=True)],
         [sg.Button('Previous Page'), sg.Button('Next Page')]
     ]
 
@@ -66,15 +66,15 @@ def db_window(mydb, cursor):
         elif event == 'Show members table':
             selected_table = 'members'
             result = fetch_page(selected_table, page_num)
-            window['-OUTPUT-'].update('\n'.join(str(row) for row in result))
+            window['db_table'].update('\n'.join(str(row) for row in result))
 
         elif event == 'Show attendance table':
             selected_table = 'attendance'
             result = fetch_page(selected_table, page_num)
-            window['-OUTPUT-'].update('\n'.join(str(row) for row in result))
+            window['db_table'].update('\n'.join(str(row) for row in result))
 
-        elif event == '-OUTPUT-':  # Triggered when a line in the Multiline element is clicked
-            selected_row = values['-OUTPUT-'].split('\n')[0]  # This assumes each row is on a separate line
+        elif event == 'db_table':  # Triggered when a line in the Multiline element is clicked
+            selected_row = values['db_table'].split('\n')[0]  # This assumes each row is on a separate line
             # Double click detection
             if event == window.last_button_clicked:
                 if selected_table == 'members':
@@ -82,18 +82,18 @@ def db_window(mydb, cursor):
 
                 # Refresh table
                 result = fetch_page(selected_table, page_num)
-                window['-OUTPUT-'].update('\n'.join(str(row) for row in result))
+                window['db_table'].update('\n'.join(str(row) for row in result))
 
         elif event == 'Previous Page':
             if page_num > 0:
                 page_num -= 1
                 result = fetch_page(selected_table, page_num)
-                window['-OUTPUT-'].update('\n'.join(str(row) for row in result))
+                window['db_table'].update('\n'.join(str(row) for row in result))
 
         elif event == 'Next Page':
             page_num += 1
             result = fetch_page(selected_table, page_num)
-            window['-OUTPUT-'].update('\n'.join(str(row) for row in result))
+            window['db_table'].update('\n'.join(str(row) for row in result))
 
 
 # opens window to edit a row in the members table
