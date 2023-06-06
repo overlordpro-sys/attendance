@@ -2,8 +2,7 @@ import PySimpleGUI as sg
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
-from mfrc522 import SimpleMFRC522
-
+from read import readUID
 
 def confirm_window(user_id, first, last, team, mydb, cursor):
     window = sg.Window("Attendance", [[sg.Text("Is this you?", justification='center')],
@@ -30,8 +29,8 @@ def main():
         mydb = mysql.connector.connect(
             host="localhost",
             database='attendance',
-            user="pi4470",
-            password="pi4470"
+            user="root",
+            password=""
         )
         if mydb.is_connected():
             cursor = mydb.cursor()
@@ -51,8 +50,6 @@ def main():
     # Create the window
     window = sg.Window("Attendance", layout)
 
-    # Initialize the scanner
-    reader = SimpleMFRC522()
 
     # Create an event loop
     while True:
@@ -66,7 +63,7 @@ def main():
             window['db_screen'].update(visible=False)
         # if on the check in screen, poll for successful scan
         if window['ci_screen'].visible:
-            user_id, text = reader.read_no_block()
+            user_id = readUID()
             if user_id is not None:
                 # if True:  # placeholder for id scanner
                 cursor.execute("SELECT first_name, last_name, team_section FROM members WHERE member_id = (%s)", (user_id,))
@@ -79,7 +76,6 @@ def main():
             break
     # cleanup
     window.close()
-    GPIO.cleanup()
     if mydb.is_connected():
         cursor.close()
         mydb.close()
