@@ -46,18 +46,20 @@ def fetch_page(table, page, cursor):
 
 # window to view and edit the database
 def db_window(mydb, cursor):
-    page_num = 0
+    member_page_num = 0
+    attendance_page_num = 0
     selected_table = 'members'
     # Define the window layout
     layout = [
         [sg.Button('Show members table'), sg.Button('Show attendance table')],
-        [sg.Table(values=[], headings=["Member ID", "First Name", "Last Name", "Team"], auto_size_columns=True, display_row_numbers=True, key='db_table', enable_events=True)],
+        [sg.Table(values=[], headings=[" Member ID ", "First Name", "Last Name", "   Team   "], display_row_numbers=True, key='member_table', enable_events=True, justification='left'),
+         sg.Table(values=[], headings=[" Timestamp ", " Member ID "], display_row_numbers=True, key='attendance_table', enable_events=True, visible=False, justification='left')],
         [sg.Button('Edit selected row')],
         [sg.Button('Previous Page'), sg.Button('Next Page')]
     ]
-    window = sg.Window("Database", layout, finalize=True)
-    rows = fetch_page('members', page_num, cursor)
-    window['db_table'].update(values=rows)
+    window = sg.Window("Database", layout, finalize=True, size=(700, 350))
+    rows = fetch_page('members', member_page_num, cursor)
+    window['member_table'].update(values=rows)
     while True:
         event, values = window.read()
         # End program if user closes window or presses the 'Quit' button
@@ -66,33 +68,46 @@ def db_window(mydb, cursor):
 
         elif event == 'Show members table':
             selected_table = 'members'
-            rows = fetch_page('members', page_num, cursor)
-            window['db_table'].update(values=rows)
+            rows = fetch_page('members', member_page_num, cursor)
+            window['member_table'].update(values=rows, visible=True)
+            window['attendance_table'].update(visible=False)
 
         elif event == 'Show attendance table':
             selected_table = 'attendance'
-            rows = fetch_page('attendance', page_num, cursor)
-            window['db_table'].update(values=rows)
+            rows = fetch_page('attendance', attendance_page_num, cursor)
+            window['attendance_table'].update(values=rows, visible=True)
+            window['member_table'].update(visible=False)
 
         elif event == 'Edit selected row':  # Triggered when a line in the Multiline element is clicked
-            selected_row = values['db_table'][0]  # This assumes each row is on a separate line
             if selected_table == 'members':
+                selected_row = values['member_table'][0]
                 edit_member_entry(mydb, cursor, rows[selected_row])
-
+                rows = fetch_page(selected_table, member_page_num, cursor)
+                window['member_table'].update(values=rows)
+            if selected_table == 'attendance':
+                selected_row = values['attendance_table'][0]
+                edit_attendance_entry(mydb, cursor, rows[selected_row])
+                rows = fetch_page(selected_table, attendance_page_num, cursor)
+                window['attendance_table'].update(values=rows)
             # Refresh table
-            rows = fetch_page(selected_table, page_num, cursor)
-            window['db_table'].update(values=rows)
-
         elif event == 'Previous Page':
-            if page_num > 0:
-                page_num -= 1
-                rows = fetch_page(selected_table, page_num, cursor)
-                window['db_table'].update(values=rows)
-
+            if selected_table == "members" and member_page_num > 0:
+                member_page_num -= 1
+                rows = fetch_page(selected_table, member_page_num, cursor)
+                window['member_table'].update(values=rows)
+            if selected_table == "attendance" and attendance_page_num > 0:
+                attendance_page_num -= 1
+                rows = fetch_page(selected_table, attendance_page_num, cursor)
+                window['attendance_table'].update(values=rows)
         elif event == 'Next Page':
-            page_num += 1
-            rows = fetch_page(selected_table, page_num, cursor)
-            window['db_table'].update(values=rows)
+            if selected_table == "members":
+                member_page_num += 1
+                rows = fetch_page(selected_table, member_page_num, cursor)
+                window['member_table'].update(values=rows)
+            else:
+                attendance_page_num += 1
+                rows = fetch_page(selected_table, attendance_page_num, cursor)
+                window['attendance_table'].update(values=rows)
 
 
 # opens window to edit a row in the members table
@@ -125,8 +140,8 @@ def edit_member_entry(mydb, cursor, selected_row):
 
 # opens window to edit a row in the attendance table
 def edit_attendance_entry(mydb, cursor, selected_row):
-    timestamp, member_id = selected_row.split(',')
-    placeholder = timestamp
+    timestamp, member_id = selected_row
+    temp_timestamp = timestamp
     window = sg.Window("Edit Attendance",
                        [[sg.Text("Timestamp: "), sg.Input(member_id, key='input_time')],
                         [sg.Text("ID: "), sg.Input(team, key='input_id')],
@@ -137,7 +152,7 @@ def edit_attendance_entry(mydb, cursor, selected_row):
         member_id = values['input_id']
         if event == "Save Changes":
             # if duplicate id (card has already been used before) updates instead of adding new entry
-            cursor.execute("UPDATE attendance SET check_in_time = %s, check_in_id = %s WHERE check_in_time = %s", (timestamp, member_id, placeholder))
+            cursor.execute("UPDATE attendance SET check_in_time = %s, check_in_id = %s WHERE check_in_time = %s", (timestamp, member_id, temp_timestamp))
             mydb.commit()
             break
         if event == sg.WIN_CLOSED or event == "Cancel":
