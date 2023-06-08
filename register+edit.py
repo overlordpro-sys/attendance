@@ -4,7 +4,6 @@ from datetime import datetime
 import PySimpleGUI as sg
 import mysql.connector
 from mysql.connector import Error
-
 from read import readUID
 
 PAGE_SIZE = 10  # Change this to whatever page size you want
@@ -44,8 +43,14 @@ def confirm_window(user_id, mydb, cursor, first="", last="", team=""):
 
 def update_table(window, table, page, cursor, where=""):
     start_index = page * PAGE_SIZE
-    print(f"SELECT * FROM {table} {where} LIMIT {start_index}, {PAGE_SIZE}")
-    cursor.execute(f"SELECT * FROM {table} {where} LIMIT {start_index}, {PAGE_SIZE}")
+    if table == 'members':
+        cursor.execute(f"SELECT * FROM {table} {where} LIMIT {start_index}, {PAGE_SIZE}")
+    else:
+        if where != "":
+            where = "AND " + where.split(" ", 1)[1]
+        query = f"select check_in_time, member_id, first_name, last_name, team_section from attendance join members where members.member_id = attendance.check_in_id {where} LIMIT {start_index}, {PAGE_SIZE}"
+        print(query)
+        cursor.execute(query)
     rows = [list(i) for i in cursor.fetchall()]
     if table == 'members':
         window['members_table'].update(values=rows)
@@ -66,7 +71,7 @@ def db_window(mydb, cursor):
          sg.Column([[sg.Combo(["ID", "Team", "First", "Last"], default_value="ID", enable_events=True, readonly=True,
                               key='members_search_combo'), sg.Input(key='members_search_input', enable_events=True)]],
                    key='members_search_col'),
-         sg.Column([[sg.Combo(["Date", "ID"], default_value="Date", enable_events=True, readonly=True,
+         sg.Column([[sg.Combo(["Date", "ID", "First", "Last", "Team"], default_value="Date", enable_events=True, readonly=True,
                               key='attendance_search_combo'),
                      sg.Input(key='attendance_search_input', enable_events=True, visible=False),
                      sg.Text("Year", key='year_text'),
@@ -80,14 +85,14 @@ def db_window(mydb, cursor):
         [sg.Table(values=[[]], headings=[" Member ID ", "First Name", "Last Name", "   Team   "],
                   display_row_numbers=True, key='members_table', enable_events=True, expand_x=True, expand_y=True,
                   hide_vertical_scroll=True, justification='center'),
-         sg.Table(values=[], headings=["   Timestamp   ", " Member ID "], display_row_numbers=True,
+         sg.Table(values=[], headings=["   Timestamp   ", " Member ID ", " First Name ", " Last Name ", "  Team  "], display_row_numbers=True,
                   key='attendance_table',
                   enable_events=True, visible=False, expand_x=True, expand_y=True, hide_vertical_scroll=True,
                   justification='center')],
         [sg.Button('Edit selected row'), sg.Button('Delete selected row'), sg.Button('Create entry')],
         [sg.Button('Previous Page'), sg.Button('Next Page')]
     ]
-    window = sg.Window("Database", layout, finalize=True, size=(700, 350), resizable=True)
+    window = sg.Window("Database", layout, finalize=True, size=(900, 350), resizable=True)
     rows = update_table(window, 'members', member_page_num, cursor)
     while True:
         event, values = window.read()
@@ -99,16 +104,16 @@ def db_window(mydb, cursor):
                 match values['members_search_combo']:
                     case "ID":
                         rows = update_table(window, 'members', member_page_num, cursor,
-                                            f" WHERE member_id LIKE '%{search}%'")
+                                            f"WHERE member_id LIKE '%{search}%'")
                     case "Team":
                         rows = update_table(window, 'members', member_page_num, cursor,
-                                            f" WHERE team_section LIKE '%{search}%'")
+                                            f"WHERE team_section LIKE '%{search}%'")
                     case "First":
                         rows = update_table(window, 'members', member_page_num, cursor,
-                                            f" WHERE first_name LIKE '%{search}%'")
+                                            f"WHERE first_name LIKE '%{search}%'")
                     case "Last":
                         rows = update_table(window, 'members', member_page_num, cursor,
-                                            f" WHERE last_name LIKE '%{search}%'")
+                                            f"WHERE last_name LIKE '%{search}%'")
             else:
                 rows = update_table(window, 'members', member_page_num, cursor)
         elif event == 'attendance_search_combo' or event == 'attendance_search_input' or \
@@ -139,12 +144,21 @@ def db_window(mydb, cursor):
                         try:
                             dt = datetime(int(year), int(month), int(day)).date()
                             rows = update_table(window, 'attendance', attendance_page_num, cursor,
-                                                f" WHERE date(check_in_time) = '{dt}'")
+                                                f"WHERE date(check_in_time) = '{dt}'")
                         except ValueError:
                             pass
                     case "ID":
                         rows = update_table(window, 'attendance', attendance_page_num, cursor,
-                                            f" WHERE check_in_id LIKE '%{search}%'")
+                                            f"WHERE check_in_id LIKE '%{search}%'")
+                    case "Team":
+                        rows = update_table(window, 'attendance', attendance_page_num, cursor,
+                                            f"WHERE team_section LIKE '%{search}%'")
+                    case "First":
+                        rows = update_table(window, 'attendance', attendance_page_num, cursor,
+                                            f"WHERE first_name LIKE '%{search}%'")
+                    case "Last":
+                        rows = update_table(window, 'attendance', attendance_page_num, cursor,
+                                            f"WHERE last_name LIKE '%{search}%'")
             else:
                 rows = update_table(window, 'attendance', attendance_page_num, cursor)
         elif event == 'attendance_search_combo':

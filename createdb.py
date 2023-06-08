@@ -25,9 +25,6 @@ attQuery = """CREATE TABLE attendance (
 )"""
 mycursor.execute(attQuery)
 
-
-
-
 for x in mycursor:
   print(x)
 
