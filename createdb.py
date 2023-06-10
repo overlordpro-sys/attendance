@@ -2,9 +2,9 @@
 import mysql.connector
 
 mydb = mysql.connector.connect(
-  host="localhost",
-  user="pi4470",
-  password="pi4470"
+    host="localhost",
+    user="pi4470",
+    password="pi4470"
 )
 
 mycursor = mydb.cursor()
@@ -26,5 +26,4 @@ attQuery = """CREATE TABLE attendance (
 mycursor.execute(attQuery)
 
 for x in mycursor:
-  print(x)
-
+    print(x)

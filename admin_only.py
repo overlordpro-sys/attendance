@@ -1,46 +1,14 @@
 import datetime
-from calendar import monthrange
 from datetime import datetime
 import PySimpleGUI as sg
 import mysql.connector
 from mysql.connector import Error
-from read import readUID
+from util import *
 
 PAGE_SIZE = 10  # Change this to whatever page size you want
 
 
-# window to edit the user data associated with a rfid tag in the database
-def confirm_window(user_id, mydb, cursor, first="", last="", team=""):
-    window = sg.Window("Attendance", [[sg.Text("Is this correct?", justification='center')],
-                                      [sg.Text("ID: "),
-                                       sg.Input(user_id, key='input_id', disabled=True)],
-                                      [sg.Text("Team: "), sg.Combo(
-                                          ["", "Programming", "Mechanical", "Shop", "Marketing", "Electrical"],
-                                          key='select_team', expand_y=True, default_value=team)],
-                                      [sg.Text("First: "), sg.Input(first, key='input_first')],
-                                      [sg.Text("Last: "), sg.Input(last, key='input_last')],
-                                      [sg.Button("Cancel"), sg.Button("Save Changes")]])
-    while True:
-        event, values = window.read()
-        if event == "Save Changes":
-            user_id = values['input_id']
-            team = values['select_team']
-            first = values['input_first']
-            last = values['input_last']
-
-            # if duplicate id (card has already been used before) updates instead of adding new entry
-            cursor.execute(
-                "INSERT INTO members (member_id, first_name, last_name, team_section) VALUES (%s, %s, %s, %s) "
-                "ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES("
-                "last_name), team_section = VALUES(team_section)",
-                (user_id, first, last, team))
-            mydb.commit()
-            break
-        if event == sg.WIN_CLOSED or event == "Cancel":
-            break
-    window.close()
-
-
+# updates the specified table in the window with current data
 def update_table(window, table, page, cursor, where=""):
     start_index = page * PAGE_SIZE
     if table == 'members':
@@ -49,7 +17,6 @@ def update_table(window, table, page, cursor, where=""):
         if where != "":
             where = "AND " + where.split(" ", 1)[1]
         query = f"select check_in_time, member_id, first_name, last_name, team_section from attendance join members where members.member_id = attendance.check_in_id {where} LIMIT {start_index}, {PAGE_SIZE}"
-        print(query)
         cursor.execute(query)
     rows = [list(i) for i in cursor.fetchall()]
     if table == 'members':
@@ -71,7 +38,8 @@ def db_window(mydb, cursor):
          sg.Column([[sg.Combo(["ID", "Team", "First", "Last"], default_value="ID", enable_events=True, readonly=True,
                               key='members_search_combo'), sg.Input(key='members_search_input', enable_events=True)]],
                    key='members_search_col'),
-         sg.Column([[sg.Combo(["Date", "ID", "First", "Last", "Team"], default_value="Date", enable_events=True, readonly=True,
+         sg.Column([[sg.Combo(["Date", "ID", "First", "Last", "Team"], default_value="Date", enable_events=True,
+                              readonly=True,
                               key='attendance_search_combo'),
                      sg.Input(key='attendance_search_input', enable_events=True, visible=False),
                      sg.Text("Year", key='year_text'),
@@ -85,7 +53,8 @@ def db_window(mydb, cursor):
         [sg.Table(values=[[]], headings=[" Member ID ", "First Name", "Last Name", "   Team   "],
                   display_row_numbers=True, key='members_table', enable_events=True, expand_x=True, expand_y=True,
                   hide_vertical_scroll=True, justification='center'),
-         sg.Table(values=[], headings=["   Timestamp   ", " Member ID ", " First Name ", " Last Name ", "  Team  "], display_row_numbers=True,
+         sg.Table(values=[], headings=["   Timestamp   ", " Member ID ", " First Name ", " Last Name ", "  Team  "],
+                  display_row_numbers=True,
                   key='attendance_table',
                   enable_events=True, visible=False, expand_x=True, expand_y=True, hide_vertical_scroll=True,
                   justification='center')],
@@ -229,154 +198,7 @@ def db_window(mydb, cursor):
                 rows = update_table(window, 'attendance', attendance_page_num, cursor)
 
 
-# opens window to edit a row in the members table
-def edit_member_entry(mydb, cursor, selected_row):
-    user_id, first, last, team = selected_row  # Assumes first column is a unique identifier
-    temp_id = user_id
-    window = sg.Window("Edit member", [[sg.Text("ID: "), sg.Input(user_id, key='input_id')],
-                                       [sg.Text("Team: "), sg.Combo(
-                                           ["", "Programming", "Mechanical", "Shop", "Marketing", "Electrical"],
-                                           key='select_team', expand_y=True, default_value=team)],
-                                       [sg.Text("First: "), sg.Input(first, key='input_first')],
-                                       [sg.Text("Last: "), sg.Input(last, key='input_last')],
-                                       [sg.Button("Cancel"), sg.Button("Save Changes")]])
-    while True:
-        event, values = window.read()
-        if event == "Save Changes":
-            user_id = values['input_id']
-            team = values['select_team']
-            first = values['input_first']
-            last = values['input_last']
-
-            # if duplicate id (card has already been used before) updates instead of adding new entry
-            cursor.execute(
-                "UPDATE members SET first_name = %s, last_name = %s, team_section = %s, member_id = %s WHERE member_id = %s",
-                (first, last, team, user_id, temp_id))
-            mydb.commit()
-            break
-        if event == sg.WIN_CLOSED or event == "Cancel":
-            break
-    window.close()
-
-
-def create_member_entry(mydb, cursor):
-    window = sg.Window("Edit member", [[sg.Text("ID: "), sg.Input(key='input_id')],
-                                       [sg.Text("Team: "), sg.Combo(
-                                           ["", "Programming", "Mechanical", "Shop", "Marketing", "Electrical"],
-                                           key='select_team', expand_y=True, default_value="")],
-                                       [sg.Text("First: "), sg.Input(key='input_first')],
-                                       [sg.Text("Last: "), sg.Input(key='input_last')],
-                                       [sg.Button("Cancel"), sg.Button("Create entry")]])
-    while True:
-        event, values = window.read()
-        if event == "Create entry":
-            member_id = values['input_id']
-            first = values['input_first']
-            last = values['input_last']
-            team = values['select_team']
-            cursor.execute("INSERT INTO members (member_id, first_name, last_name, team_section) "
-                           "VALUES (%s, %s, %s, %s)", (member_id, first, last, team))
-            mydb.commit()
-            break
-        if event == sg.WIN_CLOSED or event == "Cancel":
-            break
-    window.close()
-
-
-# opens window to edit a row in the attendance table
-def edit_attendance_entry(mydb, cursor, selected_row):
-    timestamp, member_id = selected_row
-    temp_timestamp = timestamp
-    window = sg.Window("Edit Attendance",
-                       [[sg.Text("Year"), sg.Input(timestamp.year, key='year', enable_events=True), sg.Text("Month"),
-                         sg.Combo(default_value=timestamp.month, values=[i for i in range(1, 13)], key='month',
-                                  enable_events=True),
-                         sg.Text("Day"),
-                         sg.Combo([i for i in range(1, monthrange(timestamp.year, timestamp.month)[1] + 1)],
-                                  default_value=timestamp.day, key='day', enable_events=True)],
-                        [sg.Text("Hour: "),
-                         sg.InputCombo(default_value=timestamp.hour, values=[i for i in range(1, 24)], key='hour',
-                                       enable_events=True),
-                         sg.Text("Minute: "),
-                         sg.InputCombo(default_value=timestamp.minute, values=[i for i in range(1, 60)], key='minute',
-                                       enable_events=True),
-                         sg.Text("Second: "),
-                         sg.InputCombo(default_value=timestamp.second, values=[i for i in range(1, 60)], key='second',
-                                       enable_events=True)],
-                        [sg.Text("ID: "), sg.Input(member_id, key='input_id')],
-                        [sg.Button("Cancel"), sg.Button("Save Changes")]])
-    while True:
-        event, values = window.read()
-        if event == sg.WIN_CLOSED or event == "Cancel":
-            break
-        try:
-            timestamp = datetime(int(values['year']), int(values['month']), int(values['day']),
-                                 int(values['hour']), int(values['minute']), int(values['second']))
-            member_id = values['input_id']
-            if event == "Save Changes":
-                # if duplicate id (card has already been used before) updates instead of adding new entry
-                cursor.execute("UPDATE attendance SET check_in_time = %s, check_in_id = %s WHERE check_in_time = %s",
-                               (timestamp, member_id, temp_timestamp))
-                mydb.commit()
-                break
-        except ValueError as e:
-            sg.popup_error(e, title="Error", grab_anywhere=True)
-    window.close()
-
-
-def create_attendance_entry(mydb, cursor):
-    timestamp = datetime.now()
-    window = sg.Window("Edit Attendance",
-                       [[sg.Text("Year"), sg.Input(timestamp.year, key='year', enable_events=True), sg.Text("Month"),
-                         sg.Combo(default_value=timestamp.month, values=[i for i in range(1, 13)], key='month',
-                                  enable_events=True),
-                         sg.Text("Day"),
-                         sg.Combo([i for i in range(1, monthrange(timestamp.year, timestamp.month)[1] + 1)],
-                                  default_value=timestamp.day, key='day', enable_events=True)],
-                        [sg.Text("Hour: "),
-                         sg.InputCombo(default_value=timestamp.hour, values=[i for i in range(1, 24)], key='hour',
-                                       enable_events=True),
-                         sg.Text("Minute: "),
-                         sg.InputCombo(default_value=timestamp.minute, values=[i for i in range(1, 60)], key='minute',
-                                       enable_events=True),
-                         sg.Text("Second: "),
-                         sg.InputCombo(default_value=timestamp.second, values=[i for i in range(1, 60)], key='second',
-                                       enable_events=True)],
-                        [sg.Text("ID: "), sg.Input(key='input_id')],
-                        [sg.Button("Cancel"), sg.Button("Save Changes")]])
-    while True:
-        event, values = window.read()
-        if event == sg.WIN_CLOSED or event == "Cancel":
-            break
-        try:
-            timestamp = datetime(int(values['year']), int(values['month']), int(values['day']),
-                                 int(values['hour']), int(values['minute']), int(values['second']))
-            member_id = values['input_id']
-            if event == "Save Changes":
-                # if duplicate id (card has already been used before) updates instead of adding new entry
-                cursor.execute("INSERT INTO attendance (check_in_time, check_in_id) VALUES (%s, %s)",
-                               (timestamp, member_id))
-                mydb.commit()
-                break
-        except ValueError as e:
-            sg.popup_error(e, title="Error", grab_anywhere=True)
-    window.close()
-
-
-def main():
-    try:
-        mydb = mysql.connector.connect(
-            host="DESKTOP-PMU7J6N.local",
-            database='attendance',
-            user="pi4470",
-            password="pi4470"
-        )
-        if mydb.is_connected():
-            cursor = mydb.cursor()
-    except Error as e:
-        print("Error with MySQL", e)
-        exit()
-
+def admin_window(mydb, cursor):
     window = sg.Window("Attendance", [[sg.VPush()],
                                       [sg.Text("Tap a card/tag to the scanner to view/edit current info",
                                                font=('Arial', 20))],
@@ -395,9 +217,9 @@ def main():
             cursor.execute("SELECT first_name, last_name, team_section FROM members WHERE member_id = (%s)", (user_id,))
             row = cursor.fetchone()
             if row:
-                confirm_window(user_id, mydb, cursor, row[0], row[1], row[2])
+                edit_window(user_id, mydb, cursor, row[0], row[1], row[2])
             else:
-                confirm_window(user_id, mydb, cursor)
+                edit_window(user_id, mydb, cursor)
         if event == sg.WIN_CLOSED:
             break
     # clean up
@@ -405,6 +227,22 @@ def main():
     if mydb.is_connected():
         cursor.close()
         mydb.close()
+
+
+def main():
+    try:
+        mydb = mysql.connector.connect(
+            host="localhost",
+            database='attendance',
+            user="pi4470",
+            password="pi4470"
+        )
+        if mydb.is_connected():
+            cursor = mydb.cursor()
+    except Error as e:
+        print("Error with MySQL", e)
+        exit()
+    admin_window(mydb, cursor)
 
 
 if __name__ == '__main__':

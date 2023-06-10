@@ -1,9 +1,10 @@
+from datetime import datetime
+
 import PySimpleGUI as sg
 import mysql.connector
-from datetime import datetime
 from mysql.connector import Error
-
-from read import readUID
+from admin_only import admin_window
+from util import readUID, edit_window, login
 
 
 def confirm_window(user_id, first, last, team, mydb, cursor):
@@ -31,7 +32,7 @@ def main():
     cursor = None
     try:
         mydb = mysql.connector.connect(
-            host="DESKTOP-PMU7J6N.local",
+            host="localhost",
             database='attendance',
             user="pi4470",
             password="pi4470"
@@ -43,8 +44,8 @@ def main():
         exit()
 
     # Create the layout for switching screens
-    layout = [[sg.VPush()],
-              [sg.Text("Tap your card/tag to the scanner to check in")],
+    layout = [[sg.VPush(), sg.Push(), sg.Button("Login to Admin")],
+              [sg.Text("Tap your card/tag to the scanner to check in", font=('Arial', 20))],
               [sg.VPush()]]
     # Create the window
     window = sg.Window("Attendance", layout, resizable=True, element_justification='c')
@@ -62,9 +63,14 @@ def main():
             if row:
                 confirm_window(user_id, row[0], row[1], row[2], mydb, cursor)
             else:
-                sg.popup_error("ID not found in database", title="Error", grab_anywhere=True)
+                ch = sg.popup_yes_no("ID not found in database", "Create new user?", font=('Arial', 15))
+                if ch == "Yes":
+                    edit_window(user_id, mydb, cursor)
         if event == sg.WIN_CLOSED:
             break
+        if event == 'Login to Admin':
+            if login():
+                admin_window(mydb, cursor)
     # cleanup
     window.close()
     if mydb.is_connected():
