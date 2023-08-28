@@ -40,7 +40,7 @@ def main():
         if mydb.is_connected():
             cursor = mydb.cursor()
     except Error as e:
-        print("Error with MySQL", e)
+        sg.popup_error("MySQL Database Issue", "Is the database running?")
         exit()
 
     # Create the layout for switching screens

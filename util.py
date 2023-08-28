@@ -1,6 +1,7 @@
 import datetime
 from calendar import monthrange
 from datetime import datetime
+
 import PySimpleGUI as sg
 from smartcard.scard import *
 from smartcard.util import toHexString
@@ -67,7 +68,9 @@ def edit_member_entry(mydb, cursor, selected_row):
     window.close()
 
 
+# opens a window to create a new member entry
 def create_member_entry(mydb, cursor):
+    # manually creating one with an id is unrealistic, but the option is provided anyway
     window = sg.Window("Edit member", [[sg.Text("ID: "), sg.Input(key='input_id')],
                                        [sg.Text("Team: "), sg.Combo(
                                            ["", "Programming", "Mechanical", "Shop", "Marketing", "Electrical"],
@@ -96,6 +99,7 @@ def edit_attendance_entry(mydb, cursor, selected_row):
     timestamp = selected_row[0]
     member_id = selected_row[1]
     temp_timestamp = timestamp
+    # sets up elements with their current values set to those from the database
     window = sg.Window("Edit Attendance",
                        [[sg.Text("Year"), sg.Input(timestamp.year, key='year', enable_events=True), sg.Text("Month"),
                          sg.Combo(default_value=timestamp.month, values=[i for i in range(1, 13)], key='month',
@@ -119,6 +123,7 @@ def edit_attendance_entry(mydb, cursor, selected_row):
         if event == sg.WIN_CLOSED or event == "Cancel":
             break
         try:
+            # formats the user's input into timestamp format
             timestamp = datetime(int(values['year']), int(values['month']), int(values['day']),
                                  int(values['hour']), int(values['minute']), int(values['second']))
             member_id = values['input_id']
@@ -133,8 +138,10 @@ def edit_attendance_entry(mydb, cursor, selected_row):
     window.close()
 
 
+# opens a window to create a new attendance entry
 def create_attendance_entry(mydb, cursor):
     timestamp = datetime.now()
+    # defaults input boxes to current time and sets day options to suitable days in specified month
     window = sg.Window("Edit Attendance",
                        [[sg.Text("Year"), sg.Input(timestamp.year, key='year', enable_events=True), sg.Text("Month"),
                          sg.Combo(default_value=timestamp.month, values=[i for i in range(1, 13)], key='month',
@@ -167,6 +174,7 @@ def create_attendance_entry(mydb, cursor):
                                (timestamp, member_id))
                 mydb.commit()
                 break
+        # Error thrown if day is invalid for selected month and year
         except ValueError as e:
             sg.popup_error(e, title="Error", grab_anywhere=True)
     window.close()
@@ -174,9 +182,13 @@ def create_attendance_entry(mydb, cursor):
 
 def readUID():
     result, context = SCardEstablishContext(SCARD_SCOPE_USER)
-    assert result == SCARD_S_SUCCESS
+    if result != SCARD_S_SUCCESS:
+        sg.popup_error("Failed to transmit", SCardGetErrorMessage(result))
+        exit()
     result, readers = SCardListReaders(context, [])
-    assert len(readers) > 0
+    if len(readers) < 1:
+        sg.popup_error("Reader not detected", "Is the reader plugged in?")
+        exit()
     reader = readers[0]
     result, card, protocol = SCardConnect(
         context,
@@ -192,8 +204,8 @@ def readUID():
 
 
 def login():
-    user = 'pi4470'
-    passw = 'pi4470'
+    user = '4470'
+    passw = '4470'
     layout = [[sg.Text("Username:"), sg.Input(key='username')],
               [sg.Text("Password:"), sg.Input(key='password')],
               [sg.Button("Login"), sg.Push(), sg.Button("Cancel")]]
@@ -212,6 +224,5 @@ def login():
 
 
 if __name__ == '__main__':
-    # while True:
-    #     print(readUID())
-    print(login())
+    while True:
+        print(readUID())

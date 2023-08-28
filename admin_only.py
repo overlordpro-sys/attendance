@@ -8,12 +8,17 @@ from util import *
 PAGE_SIZE = 10  # Change this to whatever page size you want
 
 
-# updates the specified table in the window with current data
+# updates the window and returns {PAGE_SIZE} rows of the specified table in the database
 def update_table(window, table, page, cursor, where=""):
     start_index = page * PAGE_SIZE
+    ''' 
+    somewhat wonky query formation based on table
+    attendance needs where clause originally because of join, members doesn't
+    '''
     if table == 'members':
         cursor.execute(f"SELECT * FROM {table} {where} LIMIT {start_index}, {PAGE_SIZE}")
     else:
+        # if additional search criteria are specified, add them to the query
         if where != "":
             where = "AND " + where.split(" ", 1)[1]
         query = f"select check_in_time, member_id, first_name, last_name, team_section from attendance join members where members.member_id = attendance.check_in_id {where} LIMIT {start_index}, {PAGE_SIZE}"
@@ -26,12 +31,12 @@ def update_table(window, table, page, cursor, where=""):
     return rows
 
 
-# window to view and edit the database
+# opens a window to edit and view the database
 def db_window(mydb, cursor):
     member_page_num = 0
     attendance_page_num = 0
     selected_table = 'members'
-    # Define the window layout
+    # Define the window layout | very cluttered since text and input boxes for searching
     layout = [
         [sg.Button('Show members table'), sg.Button('Show attendance table')],
         [sg.Text("Search by"),
@@ -67,6 +72,7 @@ def db_window(mydb, cursor):
         event, values = window.read()
         if event == sg.WINDOW_CLOSED:
             break
+        # if members search criterion box is changed or search criteria changed
         elif event == 'members_search_combo' or event == 'members_search_input':
             search = values['members_search_input']
             if search != "":
@@ -85,6 +91,7 @@ def db_window(mydb, cursor):
                                             f"WHERE last_name LIKE '%{search}%'")
             else:
                 rows = update_table(window, 'members', member_page_num, cursor)
+        # if attendance search criterion box is changed or search criteria changed
         elif event == 'attendance_search_combo' or event == 'attendance_search_input' or \
                 event == 'attendance_search_year' or event == 'attendance_search_month' or event == 'attendance_search_day':
             if values['attendance_search_combo'] == 'Date':
@@ -130,8 +137,7 @@ def db_window(mydb, cursor):
                                             f"WHERE last_name LIKE '%{search}%'")
             else:
                 rows = update_table(window, 'attendance', attendance_page_num, cursor)
-        elif event == 'attendance_search_combo':
-            pass
+        # table switching
         elif event == 'Show members table':
             selected_table = 'members'
             rows = update_table(window, 'members', member_page_num, cursor)
@@ -146,6 +152,7 @@ def db_window(mydb, cursor):
             window['attendance_search_col'].update(visible=True)
             window['members_table'].update(visible=False)
             window['members_search_col'].update(visible=False)
+        # ensure a row is selected and open it for editing based on which table is currently selected
         elif event == 'Edit selected row':
             table = 'members_table' if selected_table == 'members' else 'attendance_table'
             if len(values[table]) < 1:
@@ -158,6 +165,7 @@ def db_window(mydb, cursor):
                     edit_attendance_entry(mydb, cursor, rows[selected_row])
             rows = update_table(window, selected_table,
                                 member_page_num if selected_table == 'members' else attendance_page_num, cursor)
+        # ensure a row is selected, delete it from the database, and update the table
         elif event == 'Delete selected row':
             table = 'members_table' if selected_table == 'members' else 'attendance_table'
             if len(values[table]) < 1:
@@ -175,6 +183,7 @@ def db_window(mydb, cursor):
                     mydb.commit()
                 rows = update_table(window, selected_table,
                                     member_page_num if selected_table == 'members' else attendance_page_num, cursor)
+        # opens respective entry creation window based on current table
         elif event == 'Create entry':
             if selected_table == "members":
                 create_member_entry(mydb, cursor)
@@ -198,6 +207,7 @@ def db_window(mydb, cursor):
                 rows = update_table(window, 'attendance', attendance_page_num, cursor)
 
 
+# opens a window which gives access to db_window and editing cards
 def admin_window(mydb, cursor):
     window = sg.Window("Attendance", [[sg.VPush()],
                                       [sg.Text("Tap a card/tag to the scanner to view/edit current info",
@@ -208,9 +218,9 @@ def admin_window(mydb, cursor):
     # Create an event loop
     while True:
         event, values = window.read(timeout=100)  # moves on to check reader after 250ms
-        # if on the check in screen, poll for successful scan
         if event == "Edit Database":
             db_window(mydb, cursor)
+        # if a card is currently detected on the scanner, open it for editing or creation (based on if already in database)
         user_id = readUID()
         if user_id is not None:
             # if True:  # placeholder for id scanner
@@ -240,7 +250,7 @@ def main():
         if mydb.is_connected():
             cursor = mydb.cursor()
     except Error as e:
-        print("Error with MySQL", e)
+        sg.popup_error("MySQL Database Issue", "Is the database running?")
         exit()
     admin_window(mydb, cursor)
 
